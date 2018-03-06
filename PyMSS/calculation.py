@@ -1,5 +1,5 @@
 import numpy as np
-import polyhedra
+import PyMSS.polyhedra
 
 def construct_average_interaction_matrix(sourcelist, order=5):
     N = len(sourcelist)

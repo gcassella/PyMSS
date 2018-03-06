@@ -1,4 +1,4 @@
-import primitives
+import PyMSS.primitives as primitives
 import numpy as np
 
 class Cuboid(primitives.Polyhedron):
