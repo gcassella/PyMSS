@@ -1,11 +1,10 @@
 import sys
 import numpy as np
-import matplotlib.pyplot as plt
 
 def epsilon_metric(r1: list, r2: list):
     euclidean_metric2 = (r2[0] - r1[0])**2 + (r2[1] - r1[1])**2 + (r2[2] - r1[2])**2
 
-    return np.sqrt(euclidean_metric2 + 1e-12)
+    return np.sqrt(euclidean_metric2 + 1e-15)
 
 def vector_norm(vector: list):
     magnitude = np.linalg.norm(vector)
@@ -121,25 +120,63 @@ class Face:
         return -np.cross(np.cross(self.M, self.norm), self._get_face_altitude_grad(r)) * 1.26e-6 / (4*np.pi)
 
 class Polyhedron:
-    def __init__(self, vertices, winding, J, M):
+    def __init__(self, vertices, winding, J, M, scale_factor=[1,1,1], origin=[0,0,0]):
         self._N = len(winding)
 
-        self.J = J
-        self.M = M
+        # Hang on to these for the sake of future proofing if we want to make copies
+        self._vertices = vertices
+        self._vertices = np.multiply(self._vertices, scale_factor)
+        self._vertices = np.add(self._vertices, origin)
 
-        self.faces = []
+        self._winding = winding
+        self._J = J
+        self._M = M
+        self._origin = origin
+
+        self._faces = []
 
         for wind in winding:
             face_vertices = []
-            for index in wind:
-                face_vertices.append(vertices[index])
 
-            self.faces.append(Face(face_vertices,J,M))
+            for index in wind:
+                face_vertices.append(self._vertices[index])
+
+            self._faces.append(Face(face_vertices,J,M))
+
+    @property
+    def volume(self):
+        # Calculate the volume of arbitrary polyhedron
+        volume = 0
+
+        return volume
+
+    @property
+    def origin(self):
+        return self._origin
+
+    @property
+    def M(self):
+        return self._M
+
+    def unit_copy(self, axis):
+        if axis == 0:
+            newM = [1,0,0]
+        elif axis == 1:
+            newM = [0,1,0]
+        elif axis == 2:
+            newM = [0,0,1]
+        else:
+            newM = [0,0,0]
+
+        return Polyhedron(self._vertices, self._winding, self._J, newM)
+
+    def copy(self, newM):
+        return Polyhedron(self._vertices, self._winding, self._J, newM)
 
     def field(self, r, field = "B"):
         acc = [0, 0, 0]
 
-        for face in self.faces:
+        for face in self._faces:
             if field == "B":
                 acc = np.add(acc, face.b_flux(r))
             elif field == "H":
@@ -151,39 +188,18 @@ class Polyhedron:
 
         return acc
 
+    def constitutive(self, field):
+        # Default constitutive law is just some
+        # susceptibility multiplying the field
+        # 
+        # this is easily reimplemented for child objs
 
-if __name__ == '__main__':
-    v = [[1/3*np.sqrt(3),0,0],[-1/6*np.sqrt(3),1/2,0],[-1/6*np.sqrt(3),-1/2,0],[0,0,1/3*np.sqrt(6)]]
+        susc = 10
+        return np.multiply(susc, field)
 
-    poly = Polyhedron(v, [[0,2,1],[0,3,2],[0,1,3],[1,2,3]],[0,0,10],[10,10,10])
+    def integrate(self, func, order):
+        # Default integration behavior is to just return the function value
+        # at the center of the polyhedron. Should be reimplemented to be Gauss-Legendre
+        # quadrature for the geometry of a child Polyhedron for non generics
 
-    """
-    face1 = Face([v[0],v[2],v[1]],[0,0,0],[10,10,10])
-    face2 = Face([v[0],v[3],v[2]],[0,0,0],[10,10,10])
-    face3 = Face([v[0],v[1],v[3]],[0,0,0],[10,10,10])
-    face4 = Face([v[1],v[2],v[3]],[0,0,0],[10,10,10])
-    """
-
-    bfield = []
-    hfield = []
-    mfield = []
-
-    Z = np.linspace(0,1,num=1000)
-
-    for z in Z:
-        
-        r = [0,0, z] 
-        bfield.append(poly.field(r, "B"))
-        hfield.append(poly.field(r, "H"))
-        mfield.append(poly.field(r, "M"))
-    
-
-    bfield = np.array(bfield)
-    hfield = np.array(hfield)
-    mfield = np.array(mfield)
-
-    plt.plot(Z,np.linalg.norm(bfield, axis=1), 'k-')
-    plt.plot(Z,np.linalg.norm(hfield, axis=1), 'b-')
-    plt.plot(Z,np.linalg.norm(mfield, axis=1), 'r-')
-    plt.show()
-
+        return func(self.origin)
